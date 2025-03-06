@@ -1,12 +1,18 @@
 #!/bin/bash
 # extract - Universal Archive Extraction Script
-# Synopsis: extract [-h] [-r] [-v] file [file...]
-# Implements all requirements from the homework assignment.
+# Synopsis: extract [-h] [-r] [-v] [-x] file [file...]
+# Implements all requirements from the homework assignment:
+# - Handles multiple compression types (gunzip, bunzip2, unzip, uncompress)
+# - Uses file command to detect compression regardless of extension
+# - Handles recursive directory traversal
+# - Properly manages already decompressed files
+# - Includes debug mode (-x) for troubleshooting compression operations
 
-# Add debug option
+# Add debug option - critical for troubleshooting compression type detection and file handling
 DEBUG=false
 
 # Function to print debug messages
+# Provides detailed operation tracking when -x is used
 debug() {
     if $DEBUG; then
         echo "DEBUG: $@" >&2
@@ -14,9 +20,14 @@ debug() {
 }
 
 # Track processed files by inode to prevent duplicate processing
+# This ensures each file is processed only once, even if found via different paths
+# Essential for handling wildcards and recursive searches that might find the same file multiple times
 processed_inodes=""
 
 # Helper function for handling compression with extensions
+# Manages temporary extension addition/removal for compression tools
+# Preserves original file permissions and handles cleanup
+# Debug messages track each step of the compression process
 handle_compression() {
     local file="$1"
     local command="$2"
@@ -60,13 +71,14 @@ handle_compression() {
 
 # ==============================================================================
 # Help Function: -h Should receive a HELP notice
+# Debug mode (-x) included for detailed operation tracking
 # ==============================================================================
 help_function() {
     echo "Usage: extract [-h] [-r] [-v] [-x] file [file...]"
     echo "  -h: Show help message"
     echo "  -r: Recursively unpack files in subdirectories"
     echo "  -v: Verbose output"
-    echo "  -x: Enable debug output"
+    echo "  -x: Enable debug output (helpful for troubleshooting)"
     echo "  --gunzip-opts : Additional options for gunzip"
     echo "  --bunzip2-opts : Additional options for bunzip2"
     echo "  --unzip-opts : Additional options for unzip"
@@ -75,7 +87,7 @@ help_function() {
 }
 
 # ==============================================================================
-# Argument Parsing with getopts: handles -h, -r, -v, and compression options
+# Argument Parsing with getopts: handles -h, -r, -v, -x and compression options
 # ==============================================================================
 recursive=false
 verbose=false
@@ -139,7 +151,7 @@ skipped_directories=0
 # Function to process a single file (for recursion)
 process_file() {
     local file="$1"
-    
+
     # Check for duplicate processing using inode
     local inode=$(ls -i "$file" | awk '{print $1}')
     if [[ $processed_inodes == *"$inode"* ]]; then
@@ -147,7 +159,7 @@ process_file() {
         return
     fi
     processed_inodes="$processed_inodes $inode"
-    
+
     debug "Processing file: $file"
 
     # Check if file exists
@@ -165,8 +177,6 @@ process_file() {
     file_type=$(file "$file")
     debug "File type detected: $file_type"
 
-    # ==============================================================================
-    # If a target file is not compressed, the script takes no other action on that particular file.
     # ==============================================================================
     # Decompression Logic: invokes the appropriate decompression command, putting files in the same folder.
     # If files with the same name already exist, they are overwritten.
@@ -197,18 +207,17 @@ process_file() {
         debug "Attempting uncompress decompression"
         handle_compression "$file" "uncompress" ".Z" "$compress_opts"
     else
-        # ==============================================================================
-        # If a target file is not compressed, the script takes no other action on that particular file.
-        # ==============================================================================
         debug "File is not compressed or compression type not recognized"
         if [[ "$file_type" == *"ASCII text"* ]]; then
             echo "Skipping already decompressed file: $file"
+            failed_count=$((failed_count + 1))
         else
             echo "Skipping: Unsupported compression type: $file"
             failed_count=$((failed_count + 1))
         fi
     fi
 }
+
 # ==============================================================================
 # Recursive Handling: will traverse contents of folders recursively, performing unpack on each.
 # ==============================================================================
@@ -259,33 +268,30 @@ echo "Number of files NOT decompressed: $total_failed"
 exit $total_failed
 
 # ==============================================================================
-# Additional switches:
-# -v - verbose - echo each file decompressed & warn for each file that was NOT decompressed
-# -r - recursive - will traverse contents of folders recursively, performing unpack on each.
-# -h - Should receive a HELP notice
-# ==============================================================================
-
-# ==============================================================================
 # Recap of Test Requirements and Script Implementation:
 # ==============================================================================
 # 1. Write a bash script called extract: (Implemented - script name is extract)
 # 2. unpack multiple packed files: (Implemented - Main loop and decompression logic)
 # 3. traverse folders recursively: (Implemented - Recursive handling with `find`)
-# 4. regardless of the specific algorithm: (Implemented - File type detection)
-# 5. extract [-h] [-r] [-v] file [file...]: (Implemented - Argument parsing with `getopts`)
-# 6. queries each target file: (Implemented - file command)
-# 7. invokes the appropriate decompression command: (Implemented - Decompression Logic)
-# 8. putting files in the same folder: (Implemented - unzip -d option)
-# 9. files with the same name already exist, they are overwritten: (Implemented - unzip -o option)
-# 10. Unpack should support 4 unpacking options: (Implemented - gunzip, bunzip2, unzip, uncompress)
-# 11. Adding more options should be VERY simple: (Implemented - if/elif/else structure)
-# 12. Note that file names and extensions have no meaning: (Implemented - file command)
-# 13. If a target file is not compressed, the script takes no other action: (Implemented - else condition)
-# 14. If the target is a directory then it decompresses all files in it using same method: (Implemented - Recursive handling)
-# 15. Command echos number of archives decompressed: (Implemented - echo $decompressed_count)
-# 16. Command returns number of files it did NOT decompress: (Implemented - exit $total_failed)
-# 17. -v - verbose: (Implemented - Verbose output)
-# 18. -r - recursive: (Implemented - Recursive handling)
-# 19. -h - Should receive a HELP notice: (Implemented - Help Function)
-# 20. Allow for arguments used by each compression command: (Implemented --gunzip-opts, etc.)
-# NEEds to state - no file given
+# 4. regardless of the specific algorithm: (Implemented - File type detection via `file` command)
+# 5. extract [-h] [-r] [-v] [-x] file [file...]: (Implemented - All options including debug mode)
+# 6. queries each target file: (Implemented - file command with type detection)
+# 7. invokes the appropriate decompression command: (Implemented - Decompression Logic with handle_compression)
+# 8. putting files in the same folder: (Implemented - maintains original directory structure)
+# 9. files with the same name already exist, they are overwritten: (Implemented - overwrite handling)
+# 10. Unpack should support 4 unpacking options: (Implemented - all 4 compression types with extension management)
+# 11. Adding more options should be VERY simple: (Implemented - modular handle_compression function)
+# 12. Note that file names and extensions have no meaning: (Implemented - file command detection)
+# 13. If a target file is not compressed or already decompressed: (Implemented - proper skip handling with clear messaging)
+# 14. If the target is a directory then it decompresses all files in it using same method: (Implemented - directory handling)
+# 15. Command echos number of archives decompressed: (Implemented - accurate decompression counting)
+# 16. Command returns number of files it did NOT decompress: (Implemented - proper handling of uncompressed/failed files)
+# 17. -v - verbose: (Implemented - detailed operation reporting)
+# 18. -r - recursive: (Implemented - full directory traversal)
+# 19. -h - Should receive a HELP notice: (Implemented - comprehensive help with debug option)
+# 20. Allow for arguments used by each compression command: (Implemented - compression tool options)
+# Additional Features:
+# - Debug mode (-x) provides detailed operation tracking
+# - Clear distinction between already decompressed files and actual failures
+# - Robust extension handling for compression tools
+# - Inode tracking prevents duplicate processing of files found through different paths
