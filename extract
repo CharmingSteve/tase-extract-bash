@@ -13,9 +13,6 @@ debug() {
     fi
 }
 
-# Track processed files to avoid duplicates
-declare -A processed_files
-
 # Helper function for handling compression with extensions
 handle_compression() {
     local file="$1"
@@ -25,17 +22,13 @@ handle_compression() {
 
     dir=$(dirname "$file")
     filename=$(basename "$file")
+    temp_file="${dir}/${filename}${extension}"
     
-    # Check if file already ends with the correct extension
-    if [[ "$filename" == *"$extension" ]]; then
-        temp_file="$file"
-    else
-        temp_file="${dir}/${filename}${extension}"
-        debug "Creating temporary file with ${extension} extension: $temp_file"
-        orig_perms=$(stat -f %p "$file")
-        debug "Original file permissions: $orig_perms"
-        mv "$file" "$temp_file"
-    fi
+    debug "Creating temporary file with ${extension} extension: $temp_file"
+    orig_perms=$(stat -f %p "$file")
+    debug "Original file permissions: $orig_perms"
+    
+    mv "$file" "$temp_file"
     
     if $command $options "$temp_file"; then
         debug "$command successful, removing temporary file"
@@ -50,10 +43,7 @@ handle_compression() {
         echo "Error decompressing ($command): $file"
         debug "$command decompression failed"
         failed_count=$((failed_count + 1))
-        # Only remove temp file if we created one
-        if [[ "$temp_file" != "$file" ]]; then
-            rm -f "$temp_file"
-        fi
+        rm -f "$temp_file"
         return 1
     fi
 }
@@ -139,16 +129,6 @@ skipped_directories=0
 # Function to process a single file (for recursion)
 process_file() {
     local file="$1"
-    # Get canonical path to avoid duplicates
-    file=$(cd "$(dirname "$file")" && pwd)/$(basename "$file")
-    
-    # Check if file was already processed
-    if [[ ${processed_files[$file]} ]]; then
-        debug "Skipping already processed file: $file"
-        return
-    fi
-    processed_files[$file]=1
-    
     debug "Processing file: $file"
 
     # Check if file exists
