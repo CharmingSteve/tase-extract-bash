@@ -155,18 +155,44 @@ process_file() {
             debug "Unzip decompression failed"
             failed_count=$((failed_count + 1))
         fi
-    elif [[ "$file_type" == *"compress'd"* ]]; then
-        if $verbose; then echo "Decompressing (uncompress): $file"; fi
-        debug "Attempting uncompress decompression"
-        uncompress $compress_opts "$file"
-        if [[ $? -eq 0 ]]; then
-            decompressed_count=$((decompressed_count + 1))
-            debug "Uncompress decompression successful"
-        else
-            echo "Error decompressing (uncompress): $file"
-            debug "Uncompress decompression failed"
-            failed_count=$((failed_count + 1))
+
+elif [[ "$file_type" == *"compress'd"* ]]; then
+    if $verbose; then echo "Decompressing (uncompress): $file"; fi
+    debug "Attempting uncompress decompression"
+    
+    # Get the directory and filename
+    dir=$(dirname "$file")
+    filename=$(basename "$file")
+    temp_file="${dir}/${filename}.Z"
+    
+    debug "Creating temporary file with .Z extension: $temp_file"
+    # Save original permissions
+    orig_perms=$(stat -f %p "$file")
+    debug "Original file permissions: $orig_perms"
+    
+    # Move original file to .Z version
+    mv "$file" "$temp_file"
+
+    
+    if uncompress $compress_opts "$temp_file"; then
+        debug "Uncompress successful, removing temporary file"
+        # Remove .Z from the uncompressed file to match original filename
+        uncompressed_file="${temp_file%.*}"
+        if [[ "$uncompressed_file" != "$file" ]]; then
+            mv "$uncompressed_file" "$file"
         fi
+        decompressed_count=$((decompressed_count + 1))
+        debug "Uncompress decompression successful"
+    else
+        echo "Error decompressing (uncompress): $file"
+        debug "Uncompress decompression failed"
+        failed_count=$((failed_count + 1))
+        # Clean up temp file if decompression failed
+        rm -f "$temp_file"
+    fi
+
+
+
     else
         # ==============================================================================
         # If a target file is not compressed, the script takes no other action on that particular file.
