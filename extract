@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # extract - Universal Archive Extraction Script
 # Synopsis: extract [-h] [-r] [-v] file [file...]
 # Implements all requirements from the homework assignment.
@@ -11,6 +10,41 @@ DEBUG=false
 debug() {
     if $DEBUG; then
         echo "DEBUG: $@" >&2
+    fi
+}
+
+# Helper function for handling compression with extensions
+handle_compression() {
+    local file="$1"
+    local command="$2"
+    local extension="$3"
+    local options="$4"
+
+    dir=$(dirname "$file")
+    filename=$(basename "$file")
+    temp_file="${dir}/${filename}${extension}"
+    
+    debug "Creating temporary file with ${extension} extension: $temp_file"
+    orig_perms=$(stat -f %p "$file")
+    debug "Original file permissions: $orig_perms"
+    
+    mv "$file" "$temp_file"
+    
+    if $command $options "$temp_file"; then
+        debug "$command successful, removing temporary file"
+        uncompressed_file="${temp_file%.*}"
+        if [[ "$uncompressed_file" != "$file" ]]; then
+            mv "$uncompressed_file" "$file"
+        fi
+        decompressed_count=$((decompressed_count + 1))
+        debug "$command decompression successful"
+        return 0
+    else
+        echo "Error decompressing ($command): $file"
+        debug "$command decompression failed"
+        failed_count=$((failed_count + 1))
+        rm -f "$temp_file"
+        return 1
     fi
 }
 
@@ -122,31 +156,15 @@ process_file() {
     if [[ "$file_type" == *"gzip compressed"* ]]; then
         if $verbose; then echo "Decompressing (gunzip): $file"; fi
         debug "Attempting gunzip decompression"
-        gunzip $gunzip_opts "$file"
-        if [[ $? -eq 0 ]]; then
-            decompressed_count=$((decompressed_count + 1))
-            debug "Gunzip decompression successful"
-        else
-            echo "Error decompressing (gunzip): $file"
-            debug "Gunzip decompression failed"
-            failed_count=$((failed_count + 1))
-        fi
+        handle_compression "$file" "gunzip" ".gz" "$gunzip_opts"
     elif [[ "$file_type" == *"bzip2 compressed"* ]]; then
         if $verbose; then echo "Decompressing (bunzip2): $file"; fi
         debug "Attempting bunzip2 decompression"
-        bunzip2 $bunzip2_opts "$file"
-        if [[ $? -eq 0 ]]; then
-            decompressed_count=$((decompressed_count + 1))
-            debug "Bunzip2 decompression successful"
-        else
-            echo "Error decompressing (bunzip2): $file"
-            debug "Bunzip2 decompression failed"
-            failed_count=$((failed_count + 1))
-        fi
+        handle_compression "$file" "bunzip2" ".bz2" "$bunzip2_opts"
     elif [[ "$file_type" == *"Zip archive"* ]]; then
         if $verbose; then echo "Decompressing (unzip): $file"; fi
         debug "Attempting unzip decompression"
-        unzip $unzip_opts -o "$file" -d "$(dirname "$file")"  # -o overwrites existing files
+        unzip $unzip_opts -o "$file" -d "$(dirname "$file")"  # unzip is special case
         if [[ $? -eq 0 ]]; then
             decompressed_count=$((decompressed_count + 1))
             debug "Unzip decompression successful"
@@ -155,44 +173,10 @@ process_file() {
             debug "Unzip decompression failed"
             failed_count=$((failed_count + 1))
         fi
-
-elif [[ "$file_type" == *"compress'd"* ]]; then
-    if $verbose; then echo "Decompressing (uncompress): $file"; fi
-    debug "Attempting uncompress decompression"
-    
-    # Get the directory and filename
-    dir=$(dirname "$file")
-    filename=$(basename "$file")
-    temp_file="${dir}/${filename}.Z"
-    
-    debug "Creating temporary file with .Z extension: $temp_file"
-    # Save original permissions
-    orig_perms=$(stat -f %p "$file")
-    debug "Original file permissions: $orig_perms"
-    
-    # Move original file to .Z version
-    mv "$file" "$temp_file"
-
-    
-    if uncompress $compress_opts "$temp_file"; then
-        debug "Uncompress successful, removing temporary file"
-        # Remove .Z from the uncompressed file to match original filename
-        uncompressed_file="${temp_file%.*}"
-        if [[ "$uncompressed_file" != "$file" ]]; then
-            mv "$uncompressed_file" "$file"
-        fi
-        decompressed_count=$((decompressed_count + 1))
-        debug "Uncompress decompression successful"
-    else
-        echo "Error decompressing (uncompress): $file"
-        debug "Uncompress decompression failed"
-        failed_count=$((failed_count + 1))
-        # Clean up temp file if decompression failed
-        rm -f "$temp_file"
-    fi
-
-
-
+    elif [[ "$file_type" == *"compress'd"* ]]; then
+        if $verbose; then echo "Decompressing (uncompress): $file"; fi
+        debug "Attempting uncompress decompression"
+        handle_compression "$file" "uncompress" ".Z" "$compress_opts"
     else
         # ==============================================================================
         # If a target file is not compressed, the script takes no other action on that particular file.
@@ -239,7 +223,6 @@ for file in "$@"; do
     fi
 done
 
-
 # ==============================================================================
 # Command echos number of archives decompressed
 # ==============================================================================
@@ -263,7 +246,7 @@ exit $total_failed
 # ==============================================================================
 # Recap of Test Requirements and Script Implementation:
 # ==============================================================================
-# 1. Write a bash script called extract:  (Implemented - script name is extract)
+# 1. Write a bash script called extract: (Implemented - script name is extract)
 # 2. unpack multiple packed files: (Implemented - Main loop and decompression logic)
 # 3. traverse folders recursively: (Implemented - Recursive handling with `find`)
 # 4. regardless of the specific algorithm: (Implemented - File type detection)
@@ -283,7 +266,4 @@ exit $total_failed
 # 18. -r - recursive: (Implemented - Recursive handling)
 # 19. -h - Should receive a HELP notice: (Implemented - Help Function)
 # 20. Allow for arguments used by each compression command: (Implemented --gunzip-opts, etc.)
-
-
-
-# NEEds to state - no file given 
+# NEEds to state - no file given
