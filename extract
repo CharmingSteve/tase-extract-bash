@@ -201,11 +201,14 @@ process_file() {
         # If a target file is not compressed, the script takes no other action on that particular file.
         # ==============================================================================
         debug "File is not compressed or compression type not recognized"
-        echo "Skipping: Unsupported compression type or not a compressed file: $file"
-        failed_count=$((failed_count + 1))
+        if [[ "$file_type" == *"ASCII text"* ]]; then
+            echo "Skipping already decompressed file: $file"
+        else
+            echo "Skipping: Unsupported compression type: $file"
+            failed_count=$((failed_count + 1))
+        fi
     fi
 }
-
 # ==============================================================================
 # Recursive Handling: will traverse contents of folders recursively, performing unpack on each.
 # ==============================================================================
