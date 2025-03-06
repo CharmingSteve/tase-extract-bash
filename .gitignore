@@ -1,0 +1,9 @@
+# Ignore the test files directory
+test_files/
+
+# Ignore archive files
+*.gz
+*.bz2
+*.zip
+*.Z
+*.tar.z
