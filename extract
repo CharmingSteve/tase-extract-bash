@@ -201,7 +201,7 @@ process_file() {
             echo "Error decompressing (unzip): $file"
             debug "Unzip decompression failed"
             failed_count=$((failed_count + 1))
-        fix§
+        fi
     elif [[ "$file_type" == *"compress'd"* ]]; then
         if $verbose; then echo "Decompressing (uncompress): $file"; fi
         debug "Attempting uncompress decompression"
